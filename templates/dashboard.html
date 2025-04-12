@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Home Dashboard</title>
+  <style>
+    /* ----- Base & Global Styles ----- */
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      /* Gradient background: green → blue. Adjust as needed. */
+      background: linear-gradient(135deg, #00c853, #2962ff);
+      color: #2c3e50;
+    }
+    h1, h2, p, ul, li {
+      margin: 0;
+      padding: 0;
+    }
+    /* Container for overall layout */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+      color: #ffffff;
+      font-size: 2rem;
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    /* ----- Row & Column Layout ----- */
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      margin: 0 -10px;
+    }
+    .col-md-6 {
+      flex: 1 1 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+    }
+    @media (min-width: 768px) {
+      .col-md-6 {
+        flex: 0 0 50%;
+        max-width: 50%;
+      }
+    }
+    /* ----- Card & Tile Styles ----- */
+    .card {
+      background-color: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(6px);
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+    }
+    .card-title {
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+      font-weight: 600;
+      color: #2c3e50;
+      position: relative;
+    }
+    .card-title::after {
+      content: "";
+      display: block;
+      width: 50px;
+      height: 4px;
+      background: #3498db;
+      margin-top: 8px;
+      border-radius: 2px;
+    }
+    /* ----- Device List ----- */
+    .device-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .device-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #ccc;
+    }
+    .device-list li:last-child {
+      border-bottom: none;
+    }
+    .device-name {
+      color: #2c3e50;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+    .device-status {
+      color: #fff;
+      padding: 0.35rem 0.75rem;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      min-width: 60px;
+      text-align: center;
+    }
+    .device-status.on {
+      background-color: #2ecc71;
+    }
+    .device-status.off {
+      background-color: #e74c3c;
+    }
+    /* ----- Form Container ----- */
+    .form-container {
+      background-color: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(6px);
+    }
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      color: #2c3e50;
+      font-weight: 500;
+      font-size: 1rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1.5rem;
+      border: 1px solid #bdc3c7;
+      border-radius: 5px;
+      box-sizing: border-box;
+      font-size: 1rem;
+      transition: border-color 0.2s ease;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #3498db;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+    button[type="submit"], .view-floorplan-button {
+      display: inline-block;
+      background-color: #3498db;
+      color: #ffffff;
+      padding: 0.75rem 1.5rem;
+      margin-top: 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.3s ease, transform 0.1s ease;
+      text-decoration: none;
+      text-align: center;
+    }
+    button[type="submit"]:hover,
+    .view-floorplan-button:hover {
+      background-color: #217dbb;
+      transform: scale(1.05);
+    }
+    button[type="submit"]:active,
+    .view-floorplan-button:active {
+      transform: scale(1);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    /* ----- Temperature Buttons & Display ----- */
+    .temp-button {
+      display: inline-block;
+      margin-right: 10px;
+      margin-top: 1rem;
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 5px;
+      background-color: #6c5ce7;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease, transform 0.1s ease;
+    }
+    .temp-button:hover {
+      background-color: #5d4aca;
+      transform: scale(1.05);
+    }
+    .temp-button:active {
+      transform: scale(1);
+    }
+    #temperature-display {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      color: #2c3e50;
+    }
+    /* ----- New Block: Server Information ----- */
+    .server-info {
+      margin-bottom: 1rem;
+    }
+    .server-info p {
+      margin: 0.5rem 0;
+    }
+    @media (max-width: 768px) {
+      .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+      }
+    }
+  </style>
+  <!-- Optionally include an icon library -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" 
+        integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div class="container">
+    <h1>Smart Home Dashboard</h1>
+    <!-- Row 1: System Overview & Device Status -->
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card">
+          <h2 class="card-title">System Overview</h2>
+          <p>
+            This Smart Home Control System provides a centralized interface for managing and automating various aspects of your home.
+          </p>
+          <p>
+            Current Time: <span id="current-time">Loading...</span>
+          </p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <h2 class="card-title">Device Status</h2>
+          <ul class="device-list">
+            <li>
+              <span class="device-name">Refrigerator</span>
+              <span class="device-status" id="refrigerator-status">{{ device_status['refrigerator'] }}</span>
+            </li>
+            <li>
+              <span class="device-name">Router</span>
+              <span class="device-status" id="router-status">{{ device_status['router'] }}</span>
+            </li>
+            <li>
+              <span class="device-name">Music System</span>
+              <span class="device-status" id="music_system-status">{{ device_status['music_system'] }}</span>
+            </li>
+            <li>
+              <span class="device-name">Lamp</span>
+              <span class="device-status" id="lamp-status">{{ device_status['lamp'] }}</span>
+            </li>
+            <li>
+              <span class="device-name">Air Conditioner</span>
+              <span class="device-status" id="ac-status">{{ device_status['air_conditioner'] }}</span>
+            </li>
+          </ul>
+          <p>
+            Server Uptime: <span id="server-uptime">Loading...</span>
+          </p>
+        </div>
+      </div>
+    </div>
+    <!-- Row 2: Interaction and Temperature Control -->
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card form-container">
+          <h2 class="card-title">Control and Interaction</h2>
+          <p>Enter a command to update a setting (e.g., change device status or temperature):</p>
+          <form id="settings-form">
+            <label for="setting">Setting (e.g., "lamp" or "temperature"):</label>
+            <input type="text" id="setting" name="setting" placeholder="lamp or temperature">
+            <label for="value">Value (e.g., "ON", "OFF", or a number):</label>
+            <input type="text" id="value" name="value" placeholder="ON, OFF, or numeric value">
+            <button type="submit">Update Setting</button>
+          </form>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card">
+          <h2 class="card-title">Temperature Control</h2>
+          <div id="temperature-display">Loading...</div>
+          <button id="increase-temp" class="temp-button" onclick="changeTemperature(1)">Increase Temp</button>
+          <button id="decrease-temp" class="temp-button" onclick="changeTemperature(-1)">Decrease Temp</button>
+        </div>
+      </div>
+    </div>
+    <!-- New Block: Server Information -->
+    <div class="card server-info">
+      <h2 class="card-title">Server Information</h2>
+      <div id="server-info">
+        <p>Loading server information...</p>
+      </div>
+    </div>
+    <!-- Weather Widget -->
+    <div class="card weather-widget">
+      <h2 class="card-title">Weather in Linköping</h2>
+      <div id="weather-info">
+        <p>Loading weather data...</p>
+      </div>
+    </div>
+    <!-- Floor Plan Button -->
+    <a href="{{ url_for('floor_plan') }}" class="view-floorplan-button">View Floor Plan</a>
+  </div>
+
+  <script>
+    // --------- Weather Widget (MET API) ---------
+    function fetchWeather() {
+      const apiUrl = "https://api.met.no/weatherapi/nowcast/2.0/complete?lat=58.41&lon=15.62";
+      fetch(apiUrl, {
+        headers: {
+          "User-Agent": "SmartHomeDashboard/1.0 (example@example.com)"
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        let weatherInfo = "";
+        if (data && data.properties && data.properties.timeseries && data.properties.timeseries.length > 0) {
+          const currentEntry = data.properties.timeseries[0];
+          const time = currentEntry.time;
+          const details = currentEntry.data.instant.details;
+          const formattedTime = new Date(time).toLocaleString('sv-SE', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          weatherInfo += `<p><strong>Time:</strong> ${formattedTime}</p>`;
+          if (details.air_temperature !== undefined) {
+            weatherInfo += `<p><strong>Temperature:</strong> ${details.air_temperature} °C</p>`;
+          }
+          if (details.wind_speed !== undefined) {
+            weatherInfo += `<p><strong>Wind Speed:</strong> ${details.wind_speed} m/s</p>`;
+          }
+        } else {
+          weatherInfo = "<p>No weather data available.</p>";
+        }
+        document.getElementById("weather-info").innerHTML = weatherInfo;
+      })
+      .catch(error => {
+        console.error("Error fetching weather data:", error);
+        document.getElementById("weather-info").innerHTML = "<p>Error loading weather data.</p>";
+      });
+    }
+    fetchWeather();
+    setInterval(fetchWeather, 600000);
+
+    // --------- Temperature & Device Status Update ---------
+    let currentTemperature = 20; // initial temperature
+
+    function changeTemperature(delta) {
+      currentTemperature += delta;
+      document.getElementById("temperature-display").textContent = currentTemperature + "°C";
+      // Update AC status based on temperature
+      if (currentTemperature > 25) {
+        updateSettingInServer({device: "air_conditioner", status: "ON"});
+        updateDeviceDisplay("ac", "ON");
+      } else {
+        updateSettingInServer({device: "air_conditioner", status: "OFF"});
+        updateDeviceDisplay("ac", "OFF");
+      }
+      // Also update temperature constant on the server
+      updateSettingInServer({current_temperature: currentTemperature});
+    }
+
+    function updateDeviceDisplay(deviceId, status) {
+      const statusElement = document.getElementById(deviceId + "-status");
+      if (statusElement) {
+        statusElement.textContent = status;
+        statusElement.className = "device-status " + (status === "ON" ? "on" : "off");
+      }
+    }
+
+    // --------- Dynamic Settings Update via Fetch ---------
+    function updateSettingInServer(payload) {
+      fetch('/update_status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log("Updated settings:", data);
+      })
+      .catch(error => {
+        console.error("Error updating setting:", error);
+      });
+    }
+
+    // Handle form submission for arbitrary settings update
+    document.getElementById("settings-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const setting = document.getElementById("setting").value.trim();
+      const value = document.getElementById("value").value.trim();
+      if (setting && value) {
+        // Determine whether the value is numeric
+        const numericValue = Number(value);
+        const payload = isNaN(numericValue) ? 
+                        { device: setting, status: value.toUpperCase() } : 
+                        { current_temperature: numericValue };
+        updateSettingInServer(payload);
+      }
+    });
+
+    // --------- Server Information Update ---------
+    function fetchServerInfo() {
+      fetch('/server_info')
+        .then(response => response.json())
+        .then(data => {
+          let infoHtml = "";
+          infoHtml += `<p><strong>CPU Usage:</strong> ${data.cpu}%</p>`;
+          infoHtml += `<p><strong>Memory Usage:</strong> ${data.memory_percent}%</p>`;
+          infoHtml += `<p><strong>Disk Usage:</strong> ${data.disk_percent}%</p>`;
+          document.getElementById("server-info").innerHTML = infoHtml;
+        })
+        .catch(error => {
+          console.error("Error fetching server info:", error);
+          document.getElementById("server-info").innerHTML = "<p>Error loading server information.</p>";
+        });
+    }
+    fetchServerInfo();
+    setInterval(fetchServerInfo, 60000); // Update server info every minute
+
+    // --------- Time and Uptime (Server-Fetched) ---------
+    function fetchCurrentTime() {
+      fetch('/time')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('current-time').textContent = data.time;
+        })
+        .catch(error => {
+          console.error('Error fetching current time:', error);
+          document.getElementById('current-time').textContent = 'Error fetching time';
+        });
+    }
+    
+    function fetchServerUptime() {
+      fetch('/uptime')
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById('server-uptime').textContent = formatUptime(data.uptime);
+        })
+        .catch(error => {
+          console.error('Error fetching server uptime:', error);
+          document.getElementById('server-uptime').textContent = 'Error fetching uptime';
+        });
+    }
+    
+    function formatUptime(totalSeconds) {
+      const days = Math.floor(totalSeconds / (3600 * 24));
+      const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = Math.floor(totalSeconds % 60);
+      const parts = [];
+      if (days > 0) parts.push(`${days} days`);
+      if (hours > 0) parts.push(`${hours} hours`);
+      if (minutes > 0) parts.push(`${minutes} minutes`);
+      parts.push(`${seconds} seconds`);
+      return parts.join(', ');
+    }
+    
+    window.onload = function() {
+      fetchCurrentTime();
+      fetchServerUptime();
+      setInterval(fetchCurrentTime, 10000);
+      setInterval(fetchServerUptime, 60000);
+      document.getElementById("temperature-display").textContent = currentTemperature + "°C";
+    };
+  </script>
+</body>
+</html>

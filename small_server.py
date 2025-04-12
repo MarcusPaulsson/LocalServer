@@ -1,306 +1,170 @@
-import socket
-import threading
-from urllib.parse import parse_qs
+from flask import Flask, request, redirect, url_for, render_template, jsonify
 import os
-from cryptography.fernet import Fernet
+import datetime
+import time
+import importlib
+import psutil  # New: library for fetching system information
 
 # --- Configuration ---
 SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 80
 NO_IP_HOSTNAME = 'your_ddns.net'  # Replace with your No-IP hostname if used
-SUCCESS_REDIRECT_PATH = '/site/index.html'  # Path after successful login
-SITE_ROOT = 'site'  # Directory for static files
 
-# --- Encryption Key ---
-#  Moved key to key.py
-from key import ENCRYPTION_KEY # Keep the key in a separate file
-
-# --- User Credentials ---
-# Moved user credentials to users.py
-from key import USERS  # Keep user data in a separate file
-
-# --- Fernet Initialization ---
+# --- Encryption & User Config (unchanged) ---
+from key import ENCRYPTION_KEY, USERS
+from cryptography.fernet import Fernet
 fernet = Fernet(ENCRYPTION_KEY)
 
-def encrypt_data(data: str) -> bytes:
-    """Encrypts the given string data."""
-    return fernet.encrypt(data.encode())
+app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Replace with a persistent key for production
+logged_in = False  # For demo purposes only
+app.start_time = time.time()  # Start time for uptime
 
-def decrypt_data(token: bytes) -> str:
-    """Decrypts the given encrypted token."""
-    return fernet.decrypt(token).decode()
+# --- Helper Functions for Dynamic Constants ---
+def load_constants():
+    """
+    Load dynamic constants from the dynamic_constants.py module.
+    Returns a tuple (device_status, current_temperature).
+    """
+    import dynamic_constants as dc
+    importlib.reload(dc)  # Ensure we get the latest version
+    return dc.device_status, dc.current_temperature
 
-def serve_static_file(conn, path):
-    """Serves static files from the SITE_ROOT directory."""
-    filepath = os.path.join(SITE_ROOT, path.lstrip('/'))
-    print(f"Attempting to serve: {filepath}")  # Debugging line
-    if os.path.isfile(filepath):
-        try:
-            with open(filepath, 'rb') as f:
-                content = f.read()
-            content_type = 'text/html'  # Default
-            if filepath.endswith(".css"):
-                content_type = 'text/css'
-            elif filepath.endswith(".js"):
-                content_type = 'application/javascript'
-            elif filepath.endswith(".png"):
-                content_type = 'image/png'
-            elif filepath.endswith(".jpg") or filepath.endswith(".jpeg"):
-                content_type = 'image/jpeg'
+def write_constants(device_status, current_temperature):
+    """
+    Overwrites dynamic_constants.py with the updated settings.
+    """
+    content = (
+        "device_status = " + repr(device_status) + "\n" +
+        "current_temperature = " + str(current_temperature) + "\n"
+    )
+    with open("dynamic_constants.py", "w") as f:
+        f.write(content)
 
-            response = f"HTTP/1.1 200 OK\r\n"
-            response += f"Content-Type: {content_type}\r\n"
-            response += f"Content-Length: {len(content)}\r\n"
-            response += "\r\n"
-            conn.sendall(response.encode('utf-8') + content)
-        except Exception as e:
-            print(f"Error serving static file: {e}")
-            response = "HTTP/1.1 500 Internal Server Error\r\n\r\nInternal Server Error"
-            conn.sendall(response.encode('utf-8'))
+# --- Routes for Login, Dashboard, etc. ---
+@app.route('/')
+def index():
+    return redirect(url_for('login_form'))
+
+@app.route('/login')
+def login_form():
+    return render_template('login.html')
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    password = request.form.get('password')
+    if username in USERS and USERS[username] == password:
+        global logged_in
+        logged_in = True
+        return redirect(url_for('dashboard'))
     else:
-        response = "HTTP/1.1 404 Not Found\r\n\r\nNot Found"
-        conn.sendall(response.encode('utf-8'))
+        return render_template('login_failed.html')
 
-def handle_client(conn, addr):
-    """Handles client connections and the login/survey process."""
-    print(f"Connected by {addr}")
-    logged_in = False
+@app.route('/dashboard')
+def dashboard():
+    if logged_in:
+        # Load dynamic constants for use in the dashboard template
+        device_status, current_temperature = load_constants()
+        return render_template('dashboard.html',
+                               device_status=device_status,
+                               current_temperature=current_temperature)
+    else:
+        return redirect(url_for('login_form'))
 
-    try:
-        while True:
-            data = conn.recv(4096)
-            if not data:
-                break
-            decoded_data = data.decode('utf-8')
-            print(f"Received from {addr}:\n{decoded_data}")
+@app.route('/submit', methods=['POST'])
+def submit():
+    if not logged_in:
+        return redirect(url_for('index'))
+    answer = request.form.get('answer')
+    if answer:
+        encrypted_answer = fernet.encrypt(answer.encode())
+        print("\n--- Received Encrypted Answer ---")
+        print("Encrypted:", encrypted_answer.decode())
+        try:
+            decrypted_answer = fernet.decrypt(encrypted_answer).decode()
+            print("Decrypted:", decrypted_answer)
+        except Exception as e:
+            print("Decryption Error:", e)
+        return render_template('submission_successful.html')
+    else:
+        return "Error: Missing or empty 'answer' field.", 400
 
-            request_lines = decoded_data.splitlines()
-            if not request_lines:
-                continue
+# --- New Endpoint: Update Settings ---
+@app.route('/update_status', methods=['POST'])
+def update_status():
+    # Load current settings from dynamic_constants.py
+    device_status, current_temperature = load_constants()
+    data = request.json
+    # Update device status if provided
+    if "device" in data and "status" in data:
+        device = data["device"]
+        status = data["status"]
+        device_status[device] = status
+    # Update temperature if provided
+    if "current_temperature" in data:
+        current_temperature = data["current_temperature"]
+    # Write back to the dynamic file
+    write_constants(device_status, current_temperature)
+    return jsonify(success=True,
+                   device_status=device_status,
+                   current_temperature=current_temperature)
 
-            request_line = request_lines[0].split()
-            if len(request_line) >= 2:
-                method = request_line[0]
-                path = request_line[1]
+# --- New Endpoint: Server Information ---
+@app.route('/server_info')
+def server_info():
+    """
+    Returns system metrics (CPU, memory, disk usage) for the local machine.
+    """
+    cpu_percent = psutil.cpu_percent(interval=0.5)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    return jsonify(
+        cpu=cpu_percent,
+        memory_total=mem.total,
+        memory_available=mem.available,
+        memory_percent=mem.percent,
+        disk_total=disk.total,
+        disk_used=disk.used,
+        disk_percent=disk.percent
+    )
 
-                if path == '/':
-                    if logged_in:
-                        # Redirect to the index.html page if logged in
-                        response = "HTTP/1.1 302 Found\r\n"
-                        response += f"Location: {SUCCESS_REDIRECT_PATH}\r\n"
-                        response += "\r\n"
-                        encoded_response = response.encode('utf-8')
-                        conn.sendall(encoded_response)
-                        break
-                    else:
-                        # Serve the login form if not logged in
-                        response = "HTTP/1.1 200 OK\r\n"
-                        response += "Content-Type: text/html\r\n"
-                        response += "\r\n"
-                        response += """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>Login</title>
-                        </head>
-                        <body>
-                            <h1>Login</h1>
-                            <form method="post" action="/login">
-                                <label for="username">Username:</label><br>
-                                <input type="text" id="username" name="username"><br><br>
-                                <label for="password">Password:</label><br>
-                                <input type="password" id="password" name="password"><br><br>
-                                <button type="submit">Login</button>
-                            </form>
-                        </body>
-                        </html>
-                        """
-                        encoded_response = response.encode('utf-8')
-                        conn.sendall(encoded_response)
-                        break
+# --- Other Routes (Time, Uptime, Floor Plan) ---
+@app.route('/time')
+def get_time():
+    now = datetime.datetime.now()
+    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    return jsonify({'time': current_time})
 
-                elif path == '/login' and method == 'POST':
-                    content_length = 0
-                    for line in request_lines:
-                        if line.startswith('Content-Length:'):
-                            try:
-                                content_length = int(line.split(': ')[1])
-                            except ValueError:
-                                content_length = 0
-                            break
+@app.route('/uptime')
+def get_uptime():
+    uptime = time.time() - app.start_time
+    return jsonify({'uptime': int(uptime)})
 
-                    if content_length > 0:
-                        body = decoded_data[decoded_data.find('\r\n\r\n') + 4:]
-                        form_data = parse_qs(body)
-                        if 'username' in form_data and 'password' in form_data:
-                            username = form_data['username'][0]
-                            password = form_data['password'][0]
+@app.route('/set_device_status/<device>/<status>')
+def set_device_status(device, status):
+    if not logged_in:
+        return jsonify({'status': 'error', 'message': 'Not logged in'}), 401
+    # Load and update settings dynamically
+    device_status, current_temperature = load_constants()
+    if device in device_status:
+        if status.upper() in ["ON", "OFF"]:
+            device_status[device] = status.upper()
+            write_constants(device_status, current_temperature)
+            return jsonify({'status': 'success', 'message': f'Device {device} set to {status.upper()}'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Invalid status. Use ON or OFF.'}), 400
+    else:
+        return jsonify({'status': 'error', 'message': f'Device {device} not found.'}), 404
 
-                            if username in USERS and USERS[username] == password:
-                                logged_in = True
-                                # Redirect to the index.html page after successful login.  Let's send a welcome message.
-                                response = "HTTP/1.1 200 OK\r\n"
-                                response += "Content-Type: text/html\r\n"
-                                response += "\r\n"
-                                response += f"""
-                                <!DOCTYPE html>
-                                <html>
-                                <head>
-                                    <title>Welcome</title>
-                                </head>
-                                <body>
-                                    <h1>Welcome, {username}!</h1>
-                                    <p>You are now logged in.</p>
-                                    <p><a href="{SUCCESS_REDIRECT_PATH}">Go to main site</a></p>
-                                </body>
-                                </html>
-                                """
-                                encoded_response = response.encode('utf-8')
-                                conn.sendall(encoded_response)
-                                break
-                            else:
-                                # Login failed
-                                response = "HTTP/1.1 200 OK\r\n"
-                                response += "Content-Type: text/html\r\n"
-                                response += "\r\n"
-                                response += """
-                                <!DOCTYPE html>
-                                <html>
-                                <head>
-                                    <title>Login Failed</title>
-                                </head>
-                                <body>
-                                    <h1>Login Failed</h1>
-                                    <p>Invalid username or password.</p>
-                                    <p><a href="/">Try again</a></p>
-                                </body>
-                                </html>
-                                """
-                                encoded_response = response.encode('utf-8')
-                                conn.sendall(encoded_response)
-                                break
-                        else:
-                            response = "HTTP/1.1 400 Bad Request\r\n"
-                            response += "Content-Type: text/plain\r\n"
-                            response += "\r\n"
-                            response += "Error: Missing username or password.\r\n"
-                            encoded_response = response.encode('utf-8')
-                            conn.sendall(encoded_response)
-                            break
-                    else:
-                        response = "HTTP/1.1 400 Bad Request\r\n"
-                        response += "Content-Type: text/plain\r\n"
-                        response += "\r\n"
-                        response += "Error: No data received in POST request.\r\n"
-                        encoded_response = response.encode('utf-8')
-                        conn.sendall(encoded_response)
-                        break
+@app.route('/floor_plan')
+def floor_plan():
+    if logged_in:
+        return render_template('floor_plan.html')
+    else:
+        return redirect(url_for('login_form'))
 
-                elif path.startswith(f"/{SITE_ROOT}/"):
-                    serve_static_file(conn, path)
-                    break
-
-                elif path == '/submit' and method == 'POST' and logged_in:
-                    # Process survey data (only if logged in)
-                    content_length = 0
-                    for line in request_lines:
-                        if line.startswith('Content-Length:'):
-                            try:
-                                content_length = int(line.split(': ')[1])
-                            except ValueError:
-                                content_length = 0
-                            break
-
-                    if content_length > 0:
-                        body = decoded_data[decoded_data.find('\r\n\r\n') + 4:]
-                        form_data = parse_qs(body)
-                        if 'answer' in form_data and form_data['answer']:
-                            answer = form_data['answer'][0]
-                            encrypted_answer = encrypt_data(answer)
-                            print(f"\n--- Received Encrypted Answer from {addr} ---")
-                            print(f"Encrypted: {encrypted_answer.decode()}")
-
-                            try:
-                                decrypted_answer = decrypt_data(encrypted_answer)
-                                print(f"Decrypted: {decrypted_answer}")
-                            except Exception as e:
-                                print(f"Decryption Error: {e}")
-
-                            response = "HTTP/1.1 200 OK\r\n"
-                            response += "Content-Type: text/html\r\n"
-                            response += "\r\n"
-                            response += """
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                                <title>Submission Successful</title>
-                            </head>
-                            <body>
-                                <h1>Thank you for your submission!</h1>
-                            </body>
-                            </html>
-                            """
-                            encoded_response = response.encode('utf-8')
-                            conn.sendall(encoded_response)
-                            break
-                        else:
-                            response = "HTTP/1.1 400 Bad Request\r\n"
-                            response += "Content-Type: text/plain\r\n"
-                            response += "\r\n"
-                            response += "Error: Missing or empty 'answer' field.\r\n"
-                            encoded_response = response.encode('utf-8')
-                            conn.sendall(encoded_response)
-                            break
-                    else:
-                        response = "HTTP/1.1 400 Bad Request\r\n"
-                        response += "Content-Type: text/plain\r\n"
-                        response += "\r\n"
-                        response += "Error: No data received in POST request.\r\n"
-                        encoded_response = response.encode('utf-8')
-                        conn.sendall(encoded_response)
-                        break
-                elif path == '/submit' and method == 'POST' and not logged_in:
-                    # Redirect to login if not logged in
-                    response = "HTTP/1.1 302 Found\r\n"
-                    response += "Location: /\r\n"
-                    response += "\r\n"
-                    encoded_response = response.encode('utf-8')
-                    conn.sendall(encoded_response)
-                    break
-                else:
-                    # Handle other requests
-                    response = "HTTP/1.1 404 Not Found\r\n"
-                    response += "Content-Type: text/plain\r\n"
-                    response += "\r\n"
-                    response += "Not Found\r\n"
-                    encoded_response = response.encode('utf-8')
-                    conn.sendall(encoded_response)
-                    break
-
-    except ConnectionResetError:
-        print(f"Connection with {addr} reset.")
-    except Exception as e:
-        print(f"Error handling client {addr}: {e}")
-    finally:
-        conn.close()
-        print(f"Connection with {addr} closed.")
-
-def start_server():
-    """Starts the HTTP server."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((SERVER_HOST, SERVER_PORT))
-            s.listen()
-            print(f"Server listening on {SERVER_HOST}:{SERVER_PORT} (HTTP)")
-            print(f"Accessible via No-IP hostname: {NO_IP_HOSTNAME}:{SERVER_PORT} (if port forwarding and DNS are set up correctly)")
-            while True:
-                conn, addr = s.accept()
-                client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-                client_thread.start()
-    except Exception as e:
-        print(f"Error starting server: {e}")
-    finally:
-        print("Server stopped.")
-
-if __name__ == "__main__":
-    start_server()
+if __name__ == '__main__':
+    print(f"Server listening on {SERVER_HOST}:{SERVER_PORT} (Flask)")
+    print(f"Accessible via No-IP hostname: {NO_IP_HOSTNAME}:{SERVER_PORT} (if port forwarding and DNS are set up correctly)")
+    app.run(host=SERVER_HOST, port=SERVER_PORT, debug=True)
