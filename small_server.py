@@ -1,8 +1,8 @@
 import socket
 import threading
 from urllib.parse import parse_qs
+import os
 from cryptography.fernet import Fernet
-import os  # Import the os module for path manipulation
 
 # --- Configuration ---
 SERVER_HOST = '0.0.0.0'
@@ -12,10 +12,15 @@ SUCCESS_REDIRECT_PATH = '/site/index.html'  # Path after successful login
 SITE_ROOT = 'site'  # Directory for static files
 
 # --- Encryption Key ---
-# Ensure you have a 'key.py' file with a strong ENCRYPTION_KEY string
-from key import ENCRYPTION_KEY, USERS
+#  Moved key to key.py
+from key import ENCRYPTION_KEY # Keep the key in a separate file
 
-fernet = Fernet(ENCRYPTION_KEY.encode())
+# --- User Credentials ---
+# Moved user credentials to users.py
+from key import USERS  # Keep user data in a separate file
+
+# --- Fernet Initialization ---
+fernet = Fernet(ENCRYPTION_KEY)
 
 def encrypt_data(data: str) -> bytes:
     """Encrypts the given string data."""
@@ -133,10 +138,23 @@ def handle_client(conn, addr):
 
                             if username in USERS and USERS[username] == password:
                                 logged_in = True
-                                # Redirect to the index.html page after successful login
-                                response = "HTTP/1.1 302 Found\r\n"
-                                response += f"Location: {SUCCESS_REDIRECT_PATH}\r\n"
+                                # Redirect to the index.html page after successful login.  Let's send a welcome message.
+                                response = "HTTP/1.1 200 OK\r\n"
+                                response += "Content-Type: text/html\r\n"
                                 response += "\r\n"
+                                response += f"""
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                    <title>Welcome</title>
+                                </head>
+                                <body>
+                                    <h1>Welcome, {username}!</h1>
+                                    <p>You are now logged in.</p>
+                                    <p><a href="{SUCCESS_REDIRECT_PATH}">Go to main site</a></p>
+                                </body>
+                                </html>
+                                """
                                 encoded_response = response.encode('utf-8')
                                 conn.sendall(encoded_response)
                                 break
@@ -249,7 +267,6 @@ def handle_client(conn, addr):
                     encoded_response = response.encode('utf-8')
                     conn.sendall(encoded_response)
                     break
-
                 else:
                     # Handle other requests
                     response = "HTTP/1.1 404 Not Found\r\n"
