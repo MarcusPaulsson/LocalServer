@@ -2,15 +2,19 @@ import socket
 import threading
 from urllib.parse import parse_qs
 from cryptography.fernet import Fernet
+import os  # Import the os module for path manipulation
 
-from key import ENCRYPTION_KEY as ENCRYPTION_KEY
 # --- Configuration ---
 SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 80
-NO_IP_HOSTNAME = 'marcuspaulsson.ddns.net'
+NO_IP_HOSTNAME = 'your_ddns.net'  # Replace with your No-IP hostname if used
+SUCCESS_REDIRECT_PATH = '/site/index.html'  # Path after successful login
+SITE_ROOT = 'site'  # Directory for static files
 
-# --- Encryption Key (Keep this SECRET and SECURE in a real application!) ---
-# Generate a new key: key = Fernet.generate_key().decode()
+# --- Encryption Key ---
+# Ensure you have a 'key.py' file with a strong ENCRYPTION_KEY string
+from key import ENCRYPTION_KEY, USERS
+
 fernet = Fernet(ENCRYPTION_KEY.encode())
 
 def encrypt_data(data: str) -> bytes:
@@ -21,18 +25,50 @@ def decrypt_data(token: bytes) -> str:
     """Decrypts the given encrypted token."""
     return fernet.decrypt(token).decode()
 
+def serve_static_file(conn, path):
+    """Serves static files from the SITE_ROOT directory."""
+    filepath = os.path.join(SITE_ROOT, path.lstrip('/'))
+    print(f"Attempting to serve: {filepath}")  # Debugging line
+    if os.path.isfile(filepath):
+        try:
+            with open(filepath, 'rb') as f:
+                content = f.read()
+            content_type = 'text/html'  # Default
+            if filepath.endswith(".css"):
+                content_type = 'text/css'
+            elif filepath.endswith(".js"):
+                content_type = 'application/javascript'
+            elif filepath.endswith(".png"):
+                content_type = 'image/png'
+            elif filepath.endswith(".jpg") or filepath.endswith(".jpeg"):
+                content_type = 'image/jpeg'
+
+            response = f"HTTP/1.1 200 OK\r\n"
+            response += f"Content-Type: {content_type}\r\n"
+            response += f"Content-Length: {len(content)}\r\n"
+            response += "\r\n"
+            conn.sendall(response.encode('utf-8') + content)
+        except Exception as e:
+            print(f"Error serving static file: {e}")
+            response = "HTTP/1.1 500 Internal Server Error\r\n\r\nInternal Server Error"
+            conn.sendall(response.encode('utf-8'))
+    else:
+        response = "HTTP/1.1 404 Not Found\r\n\r\nNot Found"
+        conn.sendall(response.encode('utf-8'))
+
 def handle_client(conn, addr):
-    """Handles client connections and HTTP requests for the survey."""
+    """Handles client connections and the login/survey process."""
     print(f"Connected by {addr}")
+    logged_in = False
+
     try:
         while True:
-            data = conn.recv(4096)  # Increase buffer size for potential POST data
+            data = conn.recv(4096)
             if not data:
                 break
             decoded_data = data.decode('utf-8')
             print(f"Received from {addr}:\n{decoded_data}")
 
-            # --- Basic HTTP Request Parsing ---
             request_lines = decoded_data.splitlines()
             if not request_lines:
                 continue
@@ -43,32 +79,111 @@ def handle_client(conn, addr):
                 path = request_line[1]
 
                 if path == '/':
-                    # Serve the survey form
-                    response = "HTTP/1.1 200 OK\r\n"
-                    response += "Content-Type: text/html\r\n"
-                    response += "\r\n"
-                    response += """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Simple Survey</title>
-                    </head>
-                    <body>
-                        <h1>Please answer the question:</h1>
-                        <form method="post" action="/submit">
-                            <label for="answer">Your Answer:</label><br>
-                            <input type="text" id="answer" name="answer"><br><br>
-                            <button type="submit">Submit</button>
-                        </form>
-                    </body>
-                    </html>
-                    """
-                    encoded_response = response.encode('utf-8')
-                    conn.sendall(encoded_response)
-                    break  # Send response and close connection for this request
+                    if logged_in:
+                        # Redirect to the index.html page if logged in
+                        response = "HTTP/1.1 302 Found\r\n"
+                        response += f"Location: {SUCCESS_REDIRECT_PATH}\r\n"
+                        response += "\r\n"
+                        encoded_response = response.encode('utf-8')
+                        conn.sendall(encoded_response)
+                        break
+                    else:
+                        # Serve the login form if not logged in
+                        response = "HTTP/1.1 200 OK\r\n"
+                        response += "Content-Type: text/html\r\n"
+                        response += "\r\n"
+                        response += """
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Login</title>
+                        </head>
+                        <body>
+                            <h1>Login</h1>
+                            <form method="post" action="/login">
+                                <label for="username">Username:</label><br>
+                                <input type="text" id="username" name="username"><br><br>
+                                <label for="password">Password:</label><br>
+                                <input type="password" id="password" name="password"><br><br>
+                                <button type="submit">Login</button>
+                            </form>
+                        </body>
+                        </html>
+                        """
+                        encoded_response = response.encode('utf-8')
+                        conn.sendall(encoded_response)
+                        break
 
-                elif path == '/submit' and method == 'POST':
-                    # Process the submitted data
+                elif path == '/login' and method == 'POST':
+                    content_length = 0
+                    for line in request_lines:
+                        if line.startswith('Content-Length:'):
+                            try:
+                                content_length = int(line.split(': ')[1])
+                            except ValueError:
+                                content_length = 0
+                            break
+
+                    if content_length > 0:
+                        body = decoded_data[decoded_data.find('\r\n\r\n') + 4:]
+                        form_data = parse_qs(body)
+                        if 'username' in form_data and 'password' in form_data:
+                            username = form_data['username'][0]
+                            password = form_data['password'][0]
+
+                            if username in USERS and USERS[username] == password:
+                                logged_in = True
+                                # Redirect to the index.html page after successful login
+                                response = "HTTP/1.1 302 Found\r\n"
+                                response += f"Location: {SUCCESS_REDIRECT_PATH}\r\n"
+                                response += "\r\n"
+                                encoded_response = response.encode('utf-8')
+                                conn.sendall(encoded_response)
+                                break
+                            else:
+                                # Login failed
+                                response = "HTTP/1.1 200 OK\r\n"
+                                response += "Content-Type: text/html\r\n"
+                                response += "\r\n"
+                                response += """
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                    <title>Login Failed</title>
+                                </head>
+                                <body>
+                                    <h1>Login Failed</h1>
+                                    <p>Invalid username or password.</p>
+                                    <p><a href="/">Try again</a></p>
+                                </body>
+                                </html>
+                                """
+                                encoded_response = response.encode('utf-8')
+                                conn.sendall(encoded_response)
+                                break
+                        else:
+                            response = "HTTP/1.1 400 Bad Request\r\n"
+                            response += "Content-Type: text/plain\r\n"
+                            response += "\r\n"
+                            response += "Error: Missing username or password.\r\n"
+                            encoded_response = response.encode('utf-8')
+                            conn.sendall(encoded_response)
+                            break
+                    else:
+                        response = "HTTP/1.1 400 Bad Request\r\n"
+                        response += "Content-Type: text/plain\r\n"
+                        response += "\r\n"
+                        response += "Error: No data received in POST request.\r\n"
+                        encoded_response = response.encode('utf-8')
+                        conn.sendall(encoded_response)
+                        break
+
+                elif path.startswith(f"/{SITE_ROOT}/"):
+                    serve_static_file(conn, path)
+                    break
+
+                elif path == '/submit' and method == 'POST' and logged_in:
+                    # Process survey data (only if logged in)
                     content_length = 0
                     for line in request_lines:
                         if line.startswith('Content-Length:'):
@@ -87,8 +202,6 @@ def handle_client(conn, addr):
                             print(f"\n--- Received Encrypted Answer from {addr} ---")
                             print(f"Encrypted: {encrypted_answer.decode()}")
 
-                            # In a real scenario, you would store the encrypted data
-                            # For demonstration, we decrypt and print it back
                             try:
                                 decrypted_answer = decrypt_data(encrypted_answer)
                                 print(f"Decrypted: {decrypted_answer}")
@@ -111,8 +224,7 @@ def handle_client(conn, addr):
                             """
                             encoded_response = response.encode('utf-8')
                             conn.sendall(encoded_response)
-                            break  # Send response and close connection
-
+                            break
                         else:
                             response = "HTTP/1.1 400 Bad Request\r\n"
                             response += "Content-Type: text/plain\r\n"
@@ -121,7 +233,6 @@ def handle_client(conn, addr):
                             encoded_response = response.encode('utf-8')
                             conn.sendall(encoded_response)
                             break
-
                     else:
                         response = "HTTP/1.1 400 Bad Request\r\n"
                         response += "Content-Type: text/plain\r\n"
@@ -130,16 +241,24 @@ def handle_client(conn, addr):
                         encoded_response = response.encode('utf-8')
                         conn.sendall(encoded_response)
                         break
+                elif path == '/submit' and method == 'POST' and not logged_in:
+                    # Redirect to login if not logged in
+                    response = "HTTP/1.1 302 Found\r\n"
+                    response += "Location: /\r\n"
+                    response += "\r\n"
+                    encoded_response = response.encode('utf-8')
+                    conn.sendall(encoded_response)
+                    break
 
                 else:
-                    # Handle other requests (e.g., favicon)
+                    # Handle other requests
                     response = "HTTP/1.1 404 Not Found\r\n"
                     response += "Content-Type: text/plain\r\n"
                     response += "\r\n"
                     response += "Not Found\r\n"
                     encoded_response = response.encode('utf-8')
                     conn.sendall(encoded_response)
-                    break  # Send response and close connection
+                    break
 
     except ConnectionResetError:
         print(f"Connection with {addr} reset.")
@@ -167,12 +286,4 @@ def start_server():
         print("Server stopped.")
 
 if __name__ == "__main__":
-    # --- Generate a Fernet key if you haven't already ---
-    # from cryptography.fernet import Fernet
-    # key = Fernet.generate_key().decode()
-    # print(f"Generated Fernet Key: {key}")
-    # --- Replace 'YOUR_GENERATED_FERNET_KEY_HERE' with the key you generated ---
-    if ENCRYPTION_KEY == "YOUR_GENERATED_FERNET_KEY_HERE":
-        print("WARNING: Please replace 'YOUR_GENERATED_FERNET_KEY_HERE' with a real generated Fernet key for security!")
-
     start_server()
