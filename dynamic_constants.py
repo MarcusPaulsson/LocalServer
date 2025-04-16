@@ -1,1 +1,1 @@
-current_temperature = 13
+current_temperature = 19

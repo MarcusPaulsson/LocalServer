@@ -13,6 +13,7 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #00c853, #2962ff);
             color: #2c3e50;
+            min-height: 100%; /* Ensure body expands with content */
         }
         h1, h2, p, ul, li {
             margin: 0;
@@ -106,7 +107,7 @@
             border-color: #3498db;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
         }
-        button[type="submit"], .view-floorplan-button {
+        button[type="submit"], .view-floorplan-button, .shelly-button {
             display: inline-block;
             background-color: #3498db;
             color: #ffffff;
@@ -119,14 +120,17 @@
             transition: background-color 0.3s ease, transform 0.1s ease;
             text-decoration: none;
             text-align: center;
+            margin-right: 0.5rem; /* Added some spacing for buttons */
         }
         button[type="submit"]:hover,
-        .view-floorplan-button:hover {
+        .view-floorplan-button:hover,
+        .shelly-button:hover {
             background-color: #217dbb;
             transform: scale(1.05);
         }
         button[type="submit"]:active,
-        .view-floorplan-button:active {
+        .view-floorplan-button:active,
+        .shelly-button:active {
             transform: scale(1);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
@@ -237,73 +241,217 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/v2.30.0/date_fns.min.js" integrity="sha512-fFgm1rq5uuxikho5p/e5+zWmr87O9gNzU9t+jNHwcv+7Y85wtt2xhL4u+wi+z9F+Y1R/iQjL0bY9HnS/g4v7w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>Dashboard</h1>
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card">
-                    <h2 class="card-title">System Overview</h2>
-                    <p>
-                        This Smart Home Control System provides a centralized interface for managing and automating various aspects of your home.
-                    </p>
-                    <p>
-                        Current Time: <span id="current-time">Loading...</span>
-                    </p>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <h2 class="card-title">Temperature Control</h2>
-                    <div id="temperature-display">{{ current_temperature }}°C</div>
-                    <button id="increase-temp" class="temp-button" onclick="changeTemperature(1)">Increase Temp</button>
-                    <button id="decrease-temp" class="temp-button" onclick="changeTemperature(-1)">Decrease Temp</button>
-                </div>
+<div class="container">
+    <h1>Dashboard</h1>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <h2 class="card-title">System Overview</h2>
+                <p>
+                    This Smart Home Control System provides a centralized interface for managing and automating various aspects of your home.
+                </p>
+                <p>
+                    Current Time: <span id="current-time">Loading...</span>
+                </p>
             </div>
         </div>
-        <div class="row">
-            {% if server_info %}
-            <div class="col-md-6">
-                <div class="card server-info">
-                    <h2 class="card-title">Server Information</h2>
-                    <p><strong>CPU Usage:</strong> <span id="cpu-usage">{{ server_info.cpu }}%</span></p>
-                    <p><strong>Memory Usage:</strong> <span id="memory-usage">{{ server_info.memory_percent }}%</span></p>
-                    <p><strong>Disk Usage:</strong> <span id="disk-usage">{{ server_info.disk_percent }}%</span></p>
-                    <p><strong>Server Uptime:</strong> <span id="server-uptime">Loading...</span></p>
-                </div>
-                <div class="card plot-container">
-                    <h2 class="card-title">Recent Server Data</h2>
-                    <canvas id="server-data-plot"></canvas>
-                </div>
-            </div>
-            {% else %}
-            <div class="col-md-6">
-                <div class="card server-info">
-                    <h2 class="card-title">Server Information</h2>
-                    <p>Loading server information...</p>
-                </div>
-            </div>
-            {% endif %}
-            <div class="col-md-6">
-                <div class="card weather-widget">
-                    <h2 class="card-title">Weather in Linköping</h2>
-                    <div id="weather-info">
-                        <p>Loading weather data...</p>
-                    </div>
-                </div>
+        <div class="col-md-6">
+            <div class="card">
+                <h2 class="card-title">Temperature Control</h2>
+                <div id="temperature-display">{{ current_temperature }}°C</div>
+                <button id="increase-temp" class="temp-button" onclick="changeTemperature(1)">Increase Temp</button>
+                <button id="decrease-temp" class="temp-button" onclick="changeTemperature(-1)">Decrease Temp</button>
             </div>
         </div>
-        <a href="{{ url_for('floor_plan') }}" class="view-floorplan-button">View Floor Plan</a>
     </div>
+    <div class="row">
+        {% if server_info %}
+        <div class="col-md-6">
+            <div class="card server-info">
+                <h2 class="card-title">Server Information</h2>
+                <p><strong>CPU Usage:</strong> <span id="cpu-usage">{{ server_info.cpu }}%</span></p>
+                <p><strong>Memory Usage:</strong> <span id="memory-usage">{{ server_info.memory_percent }}%</span></p>
+                <p><strong>Disk Usage:</strong> <span id="disk-usage">{{ server_info.disk_percent }}%</span></p>
+                <p><strong>Server Uptime:</strong> <span id="server-uptime">Loading...</span></p>
+                <p><strong>Battery status:</strong> <span id="battery-life">{{ battery_percent }}%</span></p>
+                <div id="shelly-control">
+                    <h3>Laptop Charger Control</h3>
+                    <form action="{{ url_for('toggle_charger', action='on') }}" method="post">
+                        <button type="submit" class="shelly-button">Turn On Charger</button>
+                    </form>
+                    <form action="{{ url_for('toggle_charger', action='off') }}" method="post">
+                        <button type="submit" class="shelly-button">Turn Off Charger</button>
+                    </form>
+                    <p id="shelly-status">Loading status...</p>
+                </div>
+            </div>
+            <div class="card plot-container">
+                <h2 class="card-title">Recent Server Data</h2>
+                <canvas id="server-data-plot"></canvas>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-md-6">
+            <div class="card server-info">
+                <h2 class="card-title">Server Information</h2>
+                <p>Loading server information...</p>
+                <div id="shelly-control">
+                    <h3>Laptop Charger Control</h3>
+                    <form action="{{ url_for('toggle_charger', action='on') }}" method="post">
+                        <button type="submit" class="shelly-button">Turn On Charger</button>
+                    </form>
+                    <form action="{{ url_for('toggle_charger', action='off') }}" method="post">
+                        <button type="submit" class="shelly-button">Turn Off Charger</button>
+                    </form>
+                    <p id="shelly-status">Loading status...</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="col-md-6">
+            <div class="card weather-widget">
+                <h2 class="card-title">Weather in Linköping</h2>
+                <div id="weather-info">
+                    <p>Loading weather data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <a href="{{ url_for('floor_plan') }}" class="view-floorplan-button">View Floor Plan</a>
+</div>
 
-    <script>
-        // --------- Weather Widget (MET API) ---------
-        function fetchWeather() {
-            const apiUrl = "https://api.met.no/weatherapi/nowcast/2.0/complete?lat=58.41&lon=15.62";
-            fetch(apiUrl, {
-                headers: {
-                    "User-Agent": "SmartHomeDashboard/1.0 (example@example.com)"
+<script>
+    const shellyIp = "192.168.1.103";
+
+    function updateShellyStatus() {
+        fetch(`/shelly_status`)
+            .then(response => response.json())
+            .then(data => {
+                const isOn = data.ison;
+                const success = data.success;
+                const error = data.error;
+                if (success) {
+                    document.getElementById('shelly-status').textContent = `Charger is currently ${isOn ? 'on' : 'off'}`;
+                } else {
+                    document.getElementById('shelly-status').textContent = `Could not fetch charger status: ${error || 'Unknown error'}`;
                 }
             })
+            .catch(error => {
+                console.error("Error fetching Shelly status:", error);
+                document.getElementById('shelly-status').textContent = "Could not fetch charger status.";
+            });
+    }
+
+    window.onload = function() {
+        fetchCurrentTime();
+        fetchServerUptime();
+        fetchRecentServerData();
+        fetchWeather();
+        updateShellyStatus(); // Get initial Shelly status
+
+        setInterval(fetchCurrentTime, 10000);
+        setInterval(fetchServerUptime, 60000);
+        setInterval(fetchRecentServerData, 10000);
+        setInterval(fetchWeather, 600000);
+
+        // Assuming currentTemperature is defined in the template
+        const tempDisplay = document.getElementById("temperature-display");
+        if (tempDisplay && typeof currentTemperature !== 'undefined') {
+            tempDisplay.textContent = currentTemperature + "°C";
+        }
+    };
+
+    function fetchCurrentTime() {
+        fetch('/time')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('current-time').textContent = data.time;
+            })
+            .catch(error => console.error('Error fetching current time:', error));
+    }
+
+    function fetchServerUptime() {
+        fetch('/uptime')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('server-uptime').textContent = formatUptime(data.uptime);
+            })
+            .catch(error => console.error('Error fetching server uptime:', error));
+    }
+
+    function formatUptime(totalSeconds) {
+        const days = Math.floor(totalSeconds / (3600 * 24));
+        const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        const parts = [];
+        if (days > 0) parts.push(`${days} days`);
+        if (hours > 0) parts.push(`${hours} hours`);
+        if (minutes > 0) parts.push(`${minutes} minutes`);
+        parts.push(`${seconds} seconds`);
+        return parts.join(', ');
+    }
+
+    function changeTemperature(delta) {
+        let currentTemp = parseFloat(document.getElementById("temperature-display").textContent);
+        currentTemp += delta;
+        document.getElementById("temperature-display").textContent = currentTemp + "°C";
+        updateTemperatureInServer({ current_temperature: currentTemp });
+    }
+
+    function updateTemperatureInServer(payload) {
+        fetch('/update_temperature', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => console.log("Updated temperature:", data))
+        .catch(error => console.error("Error updating temperature:", error));
+    }
+
+    function fetchRecentServerData() {
+        fetch('/recent_server_data')
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.timestamps && data.cpu_percent && data.memory_percent && data.disk_percent) {
+                    updateServerDataPlot(data.timestamps, data.cpu_percent, data.memory_percent, data.disk_percent);
+                    document.getElementById('cpu-usage').textContent = data.latest.cpu + '%';
+                    document.getElementById('memory-usage').textContent = data.latest.memory_percent + '%';
+                    document.getElementById('disk-usage').textContent = data.latest.disk_percent + '%';
+                } else {
+                    console.error("Error: Incomplete server data for plot.");
+                }
+            })
+            .catch(error => console.error("Error fetching recent server data:", error));
+    }
+
+    let serverDataChart;
+    function updateServerDataPlot(timestamps, cpuData, memoryData, diskData) {
+        const ctx = document.getElementById('server-data-plot').getContext('2d');
+        if (serverDataChart) serverDataChart.destroy();
+        serverDataChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timestamps.map(ts => new Date(ts)),
+                datasets: [{ label: 'CPU (%)', data: cpuData, borderColor: 'rgba(255, 99, 132, 1)', backgroundColor: 'rgba(255, 99, 132, 0.2)', yAxisID: 'y-axis-cpu' },
+                           { label: 'Memory (%)', data: memoryData, borderColor: 'rgba(54, 162, 235, 1)', backgroundColor: 'rgba(54, 162, 235, 0.2)', yAxisID: 'y-axis-memory' },
+                           { label: 'Disk (%)', data: diskData, borderColor: 'rgba(255, 206, 86, 1)', backgroundColor: 'rgba(255, 206, 86, 0.2)', yAxisID: 'y-axis-disk' }]
+            },
+            options: {
+                responsive: true,
+                scales: { x: { type: 'time', time: { unit: 'second', displayFormats: { second: 'HH:mm:ss' } }, title: { display: true, text: 'Time' } },
+                          'y-axis-cpu': { type: 'linear', position: 'left', title: { display: true, text: 'CPU (%)' }, grid: { display: false }, beginAtZero: true },
+                          'y-axis-memory': { type: 'linear', position: 'right', title: { display: true, text: 'Memory (%)' }, grid: { display: false }, beginAtZero: true },
+                          'y-axis-disk': { type: 'linear', position: 'right', offset: true, title: { display: true, text: 'Disk (%)' }, grid: { display: false }, beginAtZero: true } },
+                plugins: { tooltip: { mode: 'index', intersect: false } }
+            }
+        });
+    }
+
+    function fetchWeather() {
+        const apiUrl = "https://api.met.no/weatherapi/nowcast/2.0/complete?lat=58.41&lon=15.62";
+        fetch(apiUrl, { headers: { "User-Agent": "SmartHomeDashboard/1.0 (example@example.com)" } })
             .then(response => response.json())
             .then(data => {
                 let weatherInfo = "";
@@ -311,20 +459,10 @@
                     const currentEntry = data.properties.timeseries[0];
                     const time = currentEntry.time;
                     const details = currentEntry.data.instant.details;
-                    const formattedTime = new Date(time).toLocaleString('sv-SE', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
+                    const formattedTime = new Date(time).toLocaleString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     weatherInfo += `<p><strong>Time:</strong> ${formattedTime}</p>`;
-                    if (details.air_temperature !== undefined) {
-                        weatherInfo += `<p><strong>Temperature:</strong> ${details.air_temperature} °C</p>`;
-                    }
-                    if (details.wind_speed !== undefined) {
-                        weatherInfo += `<p><strong>Wind Speed:</strong> ${details.wind_speed} m/s</p>`;
-                    }
+                    if (details.air_temperature !== undefined) weatherInfo += `<p><strong>Temperature:</strong> ${details.air_temperature} °C</p>`;
+                    if (details.wind_speed !== undefined) weatherInfo += `<p><strong>Wind Speed:</strong> ${details.wind_speed} m/s</p>`;
                 } else {
                     weatherInfo = "<p>No weather data available.</p>";
                 }
@@ -334,214 +472,9 @@
                 console.error("Error fetching weather data:", error);
                 document.getElementById("weather-info").innerHTML = "<p>Error loading weather data.</p>";
             });
-        }
-        fetchWeather();
-        setInterval(fetchWeather, 600000);
-
-        // --------- Temperature Update ---------
-        let currentTemperature = {{ current_temperature }};
-        function changeTemperature(delta) {
-            currentTemperature += delta;
-            document.getElementById("temperature-display").textContent = currentTemperature + "°C";
-            // Also update temperature constant on the server
-            updateTemperatureInServer({ current_temperature: currentTemperature });
-        }
-
-        // --------- Dynamic Temperature Update via Fetch ---------
-        function updateTemperatureInServer(payload) {
-            fetch('/update_temperature', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log("Updated temperature:", data);
-            })
-            .catch(error => {
-                console.error("Error updating temperature:", error);
-            });
-        }
-
-        // --------- Fetch Recent Server Data for Plot ---------
-        let serverDataChart;
-
-        function fetchRecentServerData() {
-            fetch('/recent_server_data')
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.timestamps && data.cpu_percent && data.memory_percent && data.disk_percent) {
-                        updateServerDataPlot(data.timestamps, data.cpu_percent, data.memory_percent, data.disk_percent);
-                        document.getElementById('cpu-usage').textContent = data.latest.cpu + '%';
-                        document.getElementById('memory-usage').textContent = data.latest.memory_percent + '%';
-                        document.getElementById('disk-usage').textContent = data.latest.disk_percent + '%';
-                    } else {
-                        console.error("Error: Incomplete server data received for plotting.");
-                    }
-                })
-                .catch(error => {
-                    console.error("Error fetching recent server data:", error);
-                });
-        }
-
-        function updateServerDataPlot(timestamps, cpuData, memoryData, diskData) {
-            const ctx = document.getElementById('server-data-plot').getContext('2d');
-
-            if (serverDataChart) {
-                serverDataChart.destroy();
-            }
-
-            serverDataChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: timestamps.map(ts => new Date(ts)), // Convert timestamps to Date objects
-                    datasets: [{
-                        label: 'CPU Usage (%)',
-                        data: cpuData,
-                        borderColor: 'rgba(255, 99, 132, 1)',
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        yAxisID: 'y-axis-cpu'
-                    }, {
-                        label: 'Memory Usage (%)',
-                        data: memoryData,
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                        yAxisID: 'y-axis-memory'
-                    }, {
-                        label: 'Disk Usage (%)',
-                        data: diskData,
-                        borderColor: 'rgba(255, 206, 86, 1)',
-                        backgroundColor: 'rgba(255, 206, 86, 0.2)',
-                        yAxisID: 'y-axis-disk'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'second',
-                                displayFormats: {
-                                    second: 'HH:mm:ss'
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Time'
-                            }
-                        },
-                        'y-axis-cpu': {
-                            type: 'linear',
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'CPU Usage (%)'
-                            },
-                            grid: {
-                                display: false
-                            },
-                            beginAtZero: true
-                        },
-                        'y-axis-memory': {
-                            type: 'linear',
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Memory Usage (%)'
-                            },
-                            grid: {
-                                display: false
-                            },
-                            beginAtZero: true
-                        },
-                        'y-axis-disk': {
-                            type: 'linear',
-                            position: 'right',
-                            offset: true,
-                            title: {
-                                display: true,
-                                text: 'Disk Usage (%)'
-                            },
-                            grid: {
-                                display: false
-                            },
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
-                        }
-                    }
-                }
-            });
-        }
-
-        // --------- Time and Uptime (Server-Fetched) ---------
-        function fetchCurrentTime() {
-            fetch('/time')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('current-time').textContent = data.time;
-                })
-                .catch(error => {
-                    console.error('Error fetching current time:', error);
-                    document.getElementById('current-time').textContent = 'Error fetching time';
-                });
-        }
-
-        function fetchServerUptime() {
-            fetch('/uptime')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('server-uptime').textContent = formatUptime(data.uptime);
-                })
-                .catch(error => {
-                    console.error('Error fetching server uptime:', error);
-                    document.getElementById('server-uptime').textContent = 'Error fetching uptime';
-                });
-        }
-
-        function fetchCpuTemperature() {
-            fetch('/cpu_temperature')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('cpu-temp').textContent = data.temperature + '°C';
-                })
-                .catch(error => {
-                    console.error('Error fetching CPU temperature:', error);
-                    document.getElementById('cpu-temp').textContent = 'Error fetching temp';
-                });
-        }
-
-        function formatUptime(totalSeconds) {
-            const days = Math.floor(totalSeconds / (3600 * 24));
-            const hours = Math.floor((totalSeconds % (3600 * 24)) / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = Math.floor(totalSeconds % 60);
-            const parts = [];
-            if (days > 0) parts.push(`${days} days`);
-            if (hours > 0) parts.push(`${hours} hours`);
-            if (minutes > 0) parts.push(`${minutes} minutes`);
-            parts.push(`${seconds} seconds`);
-            return parts.join(', ');
-        }
-
-        window.onload = function() {
-            fetchCurrentTime();
-            fetchServerUptime();
-            fetchCpuTemperature(); // Fetch CPU temperature on load
-            fetchRecentServerData(); // Initial fetch of server data for the plot
-            setInterval(fetchCurrentTime, 10000);
-            setInterval(fetchServerUptime, 60000);
-            setInterval(fetchCpuTemperature, 60000); // Update CPU temperature periodically
-            setInterval(fetchRecentServerData, 10000); // Update server data for plot every 10 seconds
-            document.getElementById("temperature-display").textContent = currentTemperature + "°C";
-        };
-    </script>
+    }
+    fetchWeather();
+    setInterval(fetchWeather, 600000);
+</script>
 </body>
 </html>
