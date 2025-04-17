@@ -214,5 +214,8 @@ def toggle_charger(action):
 if __name__ == '__main__':
     battery_thread = threading.Thread(target=battery_monitor_loop, daemon=True)
     battery_thread.start()
+    electricity_thread = threading.Thread(target=electricity_price_loop, daemon=True)
+    electricity_thread.start()
+
     app.run(host="0.0.0.0", port=80, debug=True)
     
