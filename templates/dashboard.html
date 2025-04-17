@@ -4,16 +4,18 @@
     <title>Smart Home Dashboard</title>
     <style>
         /* ----- Base & Global Styles ----- */
-        html, body {
+        html {
             margin: 0;
             padding: 0;
-            height: 100%;
+            height: auto;
+            background: linear-gradient(135deg, #00c853, #2962ff);
+            color: #2c3e50;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #00c853, #2962ff);
+            /* Remove background from body */
             color: #2c3e50;
-            min-height: 100%; /* Ensure body expands with content */
+            min-height: 100vh; /* Still a good practice for content sizing */
         }
         h1, h2, p, ul, li {
             margin: 0;
@@ -44,12 +46,14 @@
             box-sizing: border-box;
             padding: 10px;
         }
-        @media (min-width: 768px) {
-            .col-md-6 {
-                flex: 0 0 50%;
-                max-width: 50%;
+        @media (max-width: 768px) {
+            body {
+                /* Adjust styles for phones here */
+                min-height: 0; /* Allow the body to just wrap content height */
+                /* Potentially adjust the gradient */
+                /* background-size: cover; /* Or other background properties */
             }
-        }
+}
         /* ----- Card & Tile Styles ----- */
         .card {
             background-color: rgba(255, 255, 255, 0.85);
@@ -246,17 +250,6 @@
     <div class="row">
         <div class="col-md-6">
             <div class="card">
-                <h2 class="card-title">System Overview</h2>
-                <p>
-                    This Smart Home Control System provides a centralized interface for managing and automating various aspects of your home.
-                </p>
-                <p>
-                    Current Time: <span id="current-time">Loading...</span>
-                </p>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card">
                 <h2 class="card-title">Temperature Control</h2>
                 <div id="temperature-display">{{ current_temperature }}°C</div>
                 <button id="increase-temp" class="temp-button" onclick="changeTemperature(1)">Increase Temp</button>
@@ -274,6 +267,7 @@
                 <p><strong>Disk Usage:</strong> <span id="disk-usage">{{ server_info.disk_percent }}%</span></p>
                 <p><strong>Server Uptime:</strong> <span id="server-uptime">Loading...</span></p>
                 <p><strong>Battery status:</strong> <span id="battery-life">{{ battery_percent }}%</span></p>
+                <p><strong>Estimated Energy Consumed:</strong> <span id="energy-charged">{{ energy_charged }} Wh</span></p>
                 <div id="shelly-control">
                     <h3>Laptop Charger Control</h3>
                     <form action="{{ url_for('toggle_charger', action='on') }}" method="post">
