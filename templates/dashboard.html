@@ -315,24 +315,20 @@
 </div>
 
 <script>
-    const shellyIp = "192.168.1.103";
-
     function updateShellyStatus() {
-        fetch(`/shelly_status`)
+        fetch(`http://192.168.1.103/relay/0`)
             .then(response => response.json())
             .then(data => {
                 const isOn = data.ison;
-                const success = data.success;
-                const error = data.error;
+            
                 if (success) {
-                    document.getElementById('shelly-status').textContent = `Charger is currently ${isOn ? 'on' : 'off'}`;
+                    document.getElementById('shelly-status').textContent = `Charger is currently ${isOn}`;
                 } else {
-                    document.getElementById('shelly-status').textContent = `Could not fetch charger status: ${error || 'Unknown error'}`;
+                    document.getElementById('shelly-status').textContent = `Could not fetch charger status`;
                 }
             })
             .catch(error => {
-                console.error("Error fetching Shelly status:", error);
-                document.getElementById('shelly-status').textContent = "Could not fetch charger status.";
+                document.getElementById('shelly-status').textContent = "Could not fetch.";
             });
     }
 
@@ -342,11 +338,11 @@
         fetchRecentServerData();
         fetchWeather();
         updateShellyStatus(); // Get initial Shelly status
-
         setInterval(fetchCurrentTime, 10000);
         setInterval(fetchServerUptime, 60000);
         setInterval(fetchRecentServerData, 10000);
         setInterval(fetchWeather, 600000);
+        setInterval(updateShellyStatus, 60000)
 
         // Assuming currentTemperature is defined in the template
         const tempDisplay = document.getElementById("temperature-display");
