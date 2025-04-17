@@ -2,9 +2,11 @@ import importlib
 import sqlite3
 from key import DATABASE_NAME
 import requests
-import datetime
+from datetime import *
 import psutil
 from key import *
+import json
+import time
 
 def toggle_shelly_relay(turn_on):
     """Toggles the Shelly relay on or off."""
@@ -38,7 +40,7 @@ def get_battery_status():
         return {"success": False, "error": f"Could not retrieve battery information: {e}"}
 
 def get_time():
-    now = datetime.datetime.now()
+    now = datetime.now()
     current_time = now.strftime("%Y-%m-%d %H:%M:%S")
     return current_time
 
@@ -143,7 +145,7 @@ def get_weather_linkoping():
             current_entry = data["properties"]["timeseries"][0]
             time_str = current_entry.get("time")
             details = current_entry.get("data").get("instant").get("details")
-            formatted_time = datetime.datetime.fromisoformat(time_str.replace("Z", "+00:00")).strftime('%Y-%m-%d %H:%M:%S')
+            formatted_time = datetime.fromisoformat(time_str.replace("Z", "+00:00")).strftime('%Y-%m-%d %H:%M:%S')
             temperature = details.get("air_temperature")
             wind_speed = details.get("wind_speed")
             return {
@@ -200,10 +202,7 @@ def print_concise_data(data):
         for item in data:
             if item.get("time_start") == current_hour_start_str:
                 current_price = item.get("SEK_per_kWh")
-            elif datetime.fromisoformat(item.get("time_start")).astimezone(cet_timezone) == now_cet.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1):
-                next_price = item.get("SEK_per_kWh")
-                break # Assuming the data is ordered by time
-
+            
         if current_price is not None:
             print(f"Nu: {current_price:.3f} SEK/kWh", end="")
             if next_price is not None:
