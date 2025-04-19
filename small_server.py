@@ -1,7 +1,6 @@
 from flask import Flask, request, redirect, url_for, render_template, jsonify
 import os
 import time
-import requests  
 import threading
 from datetime import *
 
@@ -106,7 +105,8 @@ def dashboard():
         uptime = get_uptime()
         current_time = get_time()
         battery_status = get_battery_status()
-
+        electricity_price = fetch_electricity_data_from_database()
+        solar_data = fetch_solar_data_from_database()
         battery_percent = None
         battery_charging = None
         battery_time_left = None
@@ -123,7 +123,9 @@ def dashboard():
             server_info=latest_server_info,
             shelly_status=shelly_status,
             weather=weather_data,
+            electricity_price=electricity_price,
             recent_server_data=recent_server_data,
+            
             uptime=format_uptime(uptime),
             current_time=current_time,
             battery_percent=battery_percent,
@@ -152,6 +154,25 @@ def submit():
         return render_template('submission_successful.html')
     else:
         return "Error: Missing or empty 'answer' field.", 400
+
+
+@app.route('/electricity_price')
+def server_electricity_priceinfo():
+    latest_data = fetch_electricity_data_from_database()
+    if latest_data:
+        return jsonify(latest_data)
+    else:
+        return jsonify({'error': '500'}), 500
+
+
+@app.route('/solar_data')
+def server_solar_data():
+    latest_data = fetch_solar_data_from_database()
+    if latest_data:
+        return jsonify(latest_data)
+    else:
+        return jsonify({'error': '500'}), 500
+
 
 @app.route('/update_temperature', methods=['POST'])
 def update_temperature():
@@ -215,8 +236,8 @@ def toggle_charger(action):
 if __name__ == '__main__':
     battery_thread = threading.Thread(target=battery_monitor_loop, daemon=True)
     battery_thread.start()
-    electricity_thread = threading.Thread(target=electricity_price_loop, daemon=True)
-    electricity_thread.start()
+    # electricity_thread = threading.Thread(target=electricity_price_loop, daemon=True)
+    # electricity_thread.start()
 
     app.run(host="0.0.0.0", port=80, debug=True)
     

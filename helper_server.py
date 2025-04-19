@@ -7,6 +7,10 @@ import psutil
 from key import *
 import json
 import time
+from database_script import *
+import pytz
+
+LOCAL_TIMEZONE = 'Europe/Stockholm'
 
 def toggle_shelly_relay(turn_on):
     """Toggles the Shelly relay on or off."""
@@ -162,61 +166,45 @@ def get_weather_linkoping():
     
 
 
-
-
-# ---- power price ------ 
-import requests
-import json
-import time
-from datetime import datetime, timedelta, timezone
-import threading
-
-def get_electricity_price():
-    """Fetches the current electricity prices for SE3."""
-    price_area = "SE3"  # Hardcoded price area
-    now = datetime.now()
-    date_str = now.strftime("%Y/%m-%d")
-    url = f"https://www.elprisetjustnu.se/api/v1/prices/{date_str}_{price_area}.json"
+def fetch_electricity_data_from_database():
+    conn = None
     try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-        return None
+        conn = sqlite3.connect(DATABASE_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT time_start, SEK_per_kWh
+            FROM electricity_prices
+            ORDER BY time_start ASC
+        ''')
+        data_points = cursor.fetchall()
+        return data_points
+    except sqlite3.Error as e:
+        print(f"\nSQLite Error while fetching electricity data: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
 
-def print_concise_data(data):
-    """Prints a concise output of the current and next hour's price in SEK."""
-    if data and len(data) >= 2:
-        cet_timezone = timezone(timedelta(hours=2))
-        now_cet = datetime.now(cet_timezone)
-        current_hour_start_str = now_cet.strftime("%Y-%m-%dT%H:00:00+02:00")
 
-        current_price = None
-        next_price = None
 
-        for item in data:
-            if item.get("time_start") == current_hour_start_str:
-                current_price = item.get("SEK_per_kWh")
-            
-        if current_price is not None:
-            print(f"Nu: {current_price:.3f} SEK/kWh", end="")
-            if next_price is not None:
-                print(f", Nästa timme: {next_price:.3f} SEK/kWh")
-            else:
-                print()
-        elif data:
-            # If current hour's data isn't immediately available, print the first entry
-            print(f"Snart ({data[0].get('time_start')[11:16]}): {data[0].get('SEK_per_kWh', 'N/A'):.3f} SEK/kWh")
 
-def electricity_price_loop():
-    """Continuously fetches and prints electricity prices for SE3."""
-    while True:
-        electricity_data = get_electricity_price()
-        print_concise_data(electricity_data)
-        time.sleep(30)
 
+def fetch_solar_data_from_database():
+    """Fetches solar data from the database, ordered by time_local."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT time_local, ghi, temperature, predicted_power
+            FROM solar_data
+            ORDER BY time_local ASC
+        ''')
+        data_points = cursor.fetchall()
+        return data_points
+    except sqlite3.Error as e:
+        print(f"\nSQLite Error while fetching solar data: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
