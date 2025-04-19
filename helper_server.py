@@ -186,9 +186,6 @@ def fetch_electricity_data_from_database():
             conn.close()
 
 
-
-
-
 def fetch_solar_data_from_database():
     """Fetches solar data from the database, ordered by time_local."""
     conn = None

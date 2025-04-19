@@ -164,6 +164,15 @@ def server_electricity_priceinfo():
     else:
         return jsonify({'error': '500'}), 500
 
+@app.route('/shelly_plug_data')
+def server_shelly_status():
+    latest_data = get_shelly_status()
+    if latest_data:
+        return jsonify(latest_data)
+    else:
+        return jsonify({'error': '500'}), 500
+
+
 
 @app.route('/solar_data')
 def server_solar_data():
@@ -236,8 +245,6 @@ def toggle_charger(action):
 if __name__ == '__main__':
     battery_thread = threading.Thread(target=battery_monitor_loop, daemon=True)
     battery_thread.start()
-    # electricity_thread = threading.Thread(target=electricity_price_loop, daemon=True)
-    # electricity_thread.start()
 
     app.run(host="0.0.0.0", port=80, debug=True)
     

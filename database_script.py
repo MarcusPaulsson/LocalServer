@@ -274,33 +274,6 @@ def store_solar_data(data):
 
 
 def main():
-    """Main function to create the table and continuously fetch and store solar data."""
-    create_solar_table() # Create the solar_data table.
-    print(f"Storing solar data every hour in '{DATABASE_NAME}'. Keeping only the last {MAX_ENTRIES} entries. Press Ctrl+C to stop.")
-
-    try:
-        while True:
-            # Fetch data for the next 72 hours (3 days)
-            forecast_data = get_solar_and_temp_forecast(latitude, longitude, 72)
-            if forecast_data:
-                stored_count = store_solar_data(forecast_data)
-                if stored_count > 0:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"[{timestamp}] Stored {stored_count} new solar data entries.")
-                else:
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"[{timestamp}] No new solar data to store.")
-            else:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"[{timestamp}] Failed to fetch solar data.")
-
-            time.sleep(60 * 60)  # Fetch data every hour
-    except KeyboardInterrupt:
-        print("\nData collection stopped.")
-
-
-
-def main():
     """Main function to create the table and continuously store server data, and periodically fetch and print electricity prices."""
     create_table()
     create_electricity_table() # Ensure the table exists
@@ -327,6 +300,7 @@ def main():
         
 
             forecast_data = get_solar_and_temp_forecast(latitude, longitude, 72)
+            
             if forecast_data:
                 stored_count = store_solar_data(forecast_data)
                 if stored_count > 0:

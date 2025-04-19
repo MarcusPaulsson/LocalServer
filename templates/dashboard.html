@@ -330,13 +330,13 @@
   
     <script>
     function updateShellyStatus() {
-    fetch(`http://192.168.1.103/relay/0`)
+    fetch(`/shelly_plug_data`)
     .then(response => response.json())
     .then(data => {
     const isOn = data.ison;
   
-    if (success) {
-    document.getElementById('shelly-status').textContent = `Charger is currently ${isOn}`;
+    if (data) {
+    document.getElementById('shelly-status').textContent = `Charger is: ${isOn ? 'ON' : 'OFF'}`;
     } else {
     document.getElementById('shelly-status').textContent = `Could not fetch charger status`;
     }
